@@ -1,0 +1,116 @@
+!pip install ultralytics
+
+!curl -L -o dog-face-detection-yolo.zip \
+https://www.kaggle.com/api/v1/datasets/download/wutheringwang/dog-face-detectionyolo-format
+
+!unzip dog-face-detection-yolo.zip -d dogface
+
+# 下載資料集
+!wget https://www.robots.ox.ac.uk/~vgg/data/pets/data/images.tar.gz
+!tar -xzf images.tar.gz
+
+
+import os, shutil
+
+src = "images"
+dst = "/content/dogface/train/images"
+
+os.makedirs(dst, exist_ok=True)
+
+for f in os.listdir(src):
+    if f[0].isupper():   # 貓
+        shutil.copy(
+            os.path.join(src, f),
+            os.path.join(dst, "neg_" + f)
+        )
+
+
+%%writefile dogface/data.yaml
+path: /content/dogface
+train: train/images
+val: val/images
+
+nc: 1
+names: ['dog_face']
+
+
+!mkdir -p dogface/train/images
+!mkdir -p dogface/train/labels
+!mkdir -p dogface/val/images
+!mkdir -p dogface/val/labels
+
+!ls dogface/train
+!ls dogface/val
+
+
+from ultralytics import YOLO
+
+model = YOLO("yolov8n.pt")
+
+model.train(
+    data="/content/dogface/data.yaml",
+    epochs=50,
+    imgsz=640,
+    batch=16
+)
+
+#!pip install ultralytics
+from ultralytics import YOLO
+
+model = YOLO("/content/runs/detect/train/weights/best.pt")
+
+model.predict(
+    source="dogface/val/images",
+    save=True,
+    conf=0.5
+)
+
+!ls /content/runs/detect
+!ls -l dogface/
+!ls -l runs/detect/train2/weights/
+
+from ultralytics import YOLO
+
+model = YOLO("/content/runs/detect/train/weights/best.pt")
+
+model.predict(
+    source="dogface/val/images",
+    conf=0.5,
+    save=True
+)
+
+!ls runs/detect/predict
+
+from IPython.display import Image, display
+import glob
+
+image_paths = glob.glob("runs/detect/predict/*.jpg")
+
+for img_path in image_paths[:5]:  # 顯示前 5 張
+    display(Image(filename=img_path))
+
+
+
+from google.colab import files
+
+uploaded = files.upload()
+
+# Get the actual filename from the uploaded dictionary
+actual_filename = list(uploaded.keys())[0]
+
+model.predict(
+    source=actual_filename,
+    conf=0.5,
+    save=True
+)
+
+from IPython.display import Image, display
+# Update the path to 'predict2' where the latest results are saved.
+display(Image(filename=f"runs/detect/predict2/{actual_filename}"))
+
+results = model(actual_filename, conf=0.5)
+
+if len(results[0].boxes) > 0:
+    print("✅ 偵測到狗臉")
+else:
+    print("❌ 未偵測到狗臉")
